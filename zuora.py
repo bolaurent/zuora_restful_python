@@ -25,8 +25,12 @@ class Zuora(object):
         return self._unpackResponse('POST', path, response)
         
     def _unpackResponse(self, operation, path, response):
-        assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.json())
-        return json.loads(response.text)
+        print(path, response)
+        assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.content)
+        if path.startswith('/files/'):
+            return response.text
+        else:
+            return json.loads(response.text)
 
     def query(self, queryString):    
         response = self._post("/action/query", {"queryString" : queryString})
@@ -97,6 +101,31 @@ class Zuora(object):
         response = self._post('/revenue-schedules/invoice-items/' + invoiceItemId, payload)
         assert response['success'], response
         return response
-        
-        
 
+
+    def createExport(self, name, query, ConvertToCurrencies=False, Encrypted=False, Format='csv', Zip=False):
+        payload = {
+            'Name': name,
+            'Query': query,
+            'ConvertToCurrencies': ConvertToCurrencies,
+            'Encrypted': Encrypted,
+            'Format': Format,
+            'Zip': Zip
+        }
+
+        response = self._post('/object/export/', payload)
+        assert response['Success'], response
+        return response['Id']
+
+    def retrieveExport(self, id):
+        response = self._get('/object/export/' + id)
+        return response
+    
+    def deleteExport(self, id):
+        response = self._delete('/object/export/' + id)
+        assert response['success']
+        return response
+
+    def getFiles(self, id):
+        response = self._get('/files/' + id)
+        return response
