@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 
 
 class Zuora(object):
@@ -25,7 +26,6 @@ class Zuora(object):
         return self._unpackResponse('POST', path, response)
         
     def _unpackResponse(self, operation, path, response):
-        print(path, response)
         assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.content)
         if path.startswith('/files/'):
             return response.text
@@ -117,8 +117,14 @@ class Zuora(object):
         assert response['Success'], response
         return response['Id']
 
-    def retrieveExport(self, id):
+    def retrieveExport(self, id, block=True):
         response = self._get('/object/export/' + id)
+
+        if block:
+            while response['Status'] in ['Pending', 'Processing']:
+                time.sleep(2)
+                response = self._get('/object/export/' + id)
+
         return response
     
     def deleteExport(self, id):
@@ -129,3 +135,13 @@ class Zuora(object):
     def getFiles(self, id):
         response = self._get('/files/' + id)
         return response
+
+    def queryExport(self, query):
+        exportId = self.createExport('temp.csv', query)
+        exportResponse = self.retrieveExport(exportId, block=True)
+        if exportResponse['Status'] != 'Completed':
+            return exportResponse
+
+        fileResponse = self.getFiles(exportResponse['FileId'])
+        self.deleteExport(exportId)
+        return fileResponse
