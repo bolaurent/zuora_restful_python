@@ -1,7 +1,11 @@
 import requests
 import json
 import time
+import datetime
+import pdb
 
+
+ZUORA_CHUNKSIZE = 50
 
 class Zuora(object):
     def __init__(self, config):
@@ -9,9 +13,9 @@ class Zuora(object):
         self.auth = (config['user'], config['password'])
         self.accountingPeriods = None
         
-    def _get(self, path):
+    def _get(self, path, payload={}):
         response = requests.get(self.config['endpoint'] + path, 
-                        auth=self.auth)
+                        auth=self.auth, params=payload)
         return self._unpackResponse('GET', path, response)
         
     def _delete(self, path):
@@ -24,9 +28,16 @@ class Zuora(object):
                         json=payload,
                         auth=self.auth)
         return self._unpackResponse('POST', path, response)
-        
+
+    def _put(self, path, payload):
+        response = requests.put(self.config['endpoint'] + path, 
+                        json=payload,
+                        auth=self.auth)
+        return self._unpackResponse('POST', path, response)   
+
     def _unpackResponse(self, operation, path, response):
-        assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.content)
+        if path != '/object/invoice/':
+            assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.content)
         if path.startswith('/files/'):
             return response.text
         else:
@@ -65,9 +76,21 @@ class Zuora(object):
         response = self._get("/revenue-schedules/invoice-items/" + invoiceItemId)
         return response
 
-    def deleteRevenueSchedule(self, rsNumber):
-        response = self._delete("/revenue-schedules/" + rsNumber)
-        assert response['success'], response
+    def getRevenueSchedulesForSubscriptionCharge(self, chargeId):
+        response = self._get("/revenue-schedules/subscription-charges/" + chargeId)
+        return response
+
+    # def deleteRevenueSchedule(self, rsNumber):
+    #     response = self._delete("/revenue-schedules/" + rsNumber)
+    #     assert response['success'], response
+
+    def delete(self, objectType, ids):
+        results = []
+        chunks = [ids[i:i + ZUORA_CHUNKSIZE] for i in range(0, len(ids), ZUORA_CHUNKSIZE)]
+        for chunk in chunks:
+            results += self._post('/action/delete', {'type': objectType, 'ids': chunk})
+
+        return results
         
     def getAccountPeriods(self):
         if not self.accountingPeriods:
@@ -97,17 +120,21 @@ class Zuora(object):
     #     }
     # }
     
-    def revenueSchedule(self, invoiceItemId, payload):
+    def revenueScheduleForInvoiceItem(self, invoiceItemId, payload):
         response = self._post('/revenue-schedules/invoice-items/' + invoiceItemId, payload)
         assert response['success'], response
         return response
 
+    def revenueScheduleForSubscriptionCharge(self, invoiceItemId, payload):
+        response = self._post('/revenue-schedules/subscription-charges/' + invoiceItemId, payload)
+        assert response['success'], response
+        return response
 
-    def createExport(self, name, query, ConvertToCurrencies=False, Encrypted=False, Format='csv', Zip=False):
+    def createExport(self, name, query, convertToCurrencies='USD', Encrypted=False, Format='csv', Zip=False):
         payload = {
             'Name': name,
             'Query': query,
-            'ConvertToCurrencies': ConvertToCurrencies,
+            'ConvertToCurrencies': convertToCurrencies,
             'Encrypted': Encrypted,
             'Format': Format,
             'Zip': Zip
@@ -145,3 +172,150 @@ class Zuora(object):
         fileResponse = self.getFiles(exportResponse['FileId'])
         self.deleteExport(exportId)
         return fileResponse
+
+    def createInvoice(self, accountId, invoiceDate, targetDate,
+                        includesOneTime=True,
+                        includesRecurring=True,
+                        includesUsage=True):
+
+        if isinstance(invoiceDate, datetime.date):
+            invoiceDate = invoiceDate.strftime('%Y-%m-%d')
+        if isinstance(targetDate, datetime.date):
+            targetDate = targetDate.strftime('%Y-%m-%d')
+
+        payload={
+            'AccountId': accountId,
+            'IncludesOneTime': includesOneTime,
+            'includesRecurring': includesRecurring,
+            'IncludesUsage': includesUsage,
+            'InvoiceDate': invoiceDate,
+            'TargetDate': targetDate
+        }
+
+        response = self._post('/object/invoice/', payload)
+        if not response['Success']:
+            for error in response['Errors']:
+                if error['Code'] == 'INVALID_VALUE' and 'no charges due' in error['Message']:
+                    return None
+        assert response['Success'], response
+        return response
+
+    def updateInvoice(self, invoiceId, payload):
+        payload['Id'] = invoiceId
+        response = self._put('/object/invoice/' + invoiceId, payload)
+        assert response['Success'], response
+
+    def createProduct(self, product):
+        response = self._post('/object/product/', product)
+        assert response['Success'], response
+        return response['Id']                
+    
+    def updateProduct(self, productId, payload):
+        payload['Id'] = productId
+        response = self._put('/object/product/' + productId, payload)
+        assert response['Success'], response
+
+    def createProductRatePlan(self, ratePlan):
+        response = self._post('/object/product-rate-plan/', ratePlan)
+        assert response['Success'], response
+        return response['Id']                
+        
+    def createProductRatePlanCharge(self, ratePlanCharge):
+        response = self._post('/object/product-rate-plan-charge/', ratePlanCharge)
+        assert response['Success'], response
+        return response['Id']   
+
+    def updateProductRatePlanCharge(self, ratePlanChargeId, payload):
+        payload['Id'] = ratePlanChargeId
+        response = self._put('/object/product-rate-plan-charge/' + ratePlanChargeId, payload)
+        assert response['Success'], response
+
+    def getAllAccountingPeriods(self):
+        response = self._get('/accounting-periods/')
+        assert response['success'], response
+        return response['accountingPeriods']
+
+    def updateAccountingPeriod(self, accountingPeriodId, payload):
+        response = self._put('/accounting-periods/' + accountingPeriodId, payload)
+        assert response['success'], response
+
+    # not tested
+    # def getCustomExchangeRates(self, currency, startDate, endDate):
+    #     payload = {'startDate': startDate, 'endDate': endDate}
+    #     response = self._get('/custom-exchange-rates/' + currency, payload=payload)
+    #     pdb.set_trace()
+    #     pass
+
+    def createInvoiceItemAdjustment(self, type, amount, sourceType, sourceId, adjustmentDate, invoiceNumber=None, invoiceId=None):
+        payload = {
+            'Type': type,
+            'Amount': amount,
+            'SourceType': sourceType,
+            'SourceId': sourceId,
+            'AdjustmentDate': adjustmentDate
+        }
+
+        if invoiceId:
+            payload['InvoiceId'] = invoiceId
+        elif invoiceNumber:
+            payload['InvoiceNumber'] = invoiceNumber
+            
+        response = self._post('/object/invoice-item-adjustment/', payload)
+        if not response['Success']:
+            pdb.set_trace()
+        # assert response['Success'], response
+        return response 
+
+    def updateInvoiceItemAdjustment(self, id, reasonCode=None, status=None, transferredToAccounting=None):
+        payload = {}
+        if reasonCode:
+            payload['ReasonCode'] = reasonCode
+        if status:
+            payload['Status'] = status
+        if transferredToAccounting:
+            payload['TransferredToAccounting'] = transferredToAccounting
+        response = self._put('/object/invoice-item-adjustment/' + id, payload)
+        assert response['Success'], response
+        return response 
+        
+    def createBillRun(self, invoiceDate, targetDate,
+                        accountId=None, 
+                        autoEmail=False, 
+                        autoPost=False, 
+                        autoRenewal=False,
+                        batch='AllBatches', 
+                        billCycleDay='AllBillCycleDays',
+                        chargeTypeToExclude='',
+                        noEmailForZeroAmountInvoice=False):
+        payload={
+                    'InvoiceDate': invoiceDate if isinstance(invoiceDate, str) else invoiceDate.strftime('%Y-%m-%d'),
+                    'TargetDate': targetDate if isinstance(targetDate, str) else targetDate.strftime('%Y-%m-%d'),
+                    'AutoEmail': autoEmail, 
+                    'AutoPost': autoPost, 
+                    'AutoRenewal': autoRenewal,
+                    'Batch': batch,
+                    'BillCycleDay': billCycleDay,
+                    'NoEmailForZeroAmountInvoice': noEmailForZeroAmountInvoice             
+        }
+
+        if accountId:
+            payload['AccountId'] = accountId
+        if chargeTypeToExclude:
+            payload['ChargeTypeToExclude'] = chargeTypeToExclude
+
+        response = self._post('/object/bill-run/', payload)
+        assert response['Success'], response
+        return response
+
+    def createPayment(self, payload):
+        response = self._post('/object/payment/', payload)
+        return response
+
+
+    # https://knowledgecenter.zuora.com/DC_Developers/SOAP_API/E1_SOAP_API_Object_Reference/CreditBalanceAdjustment
+    # 
+    # Requires you open a Zuora Support ticket to enable this feature
+    #
+    def createCreditBalanceAdjustment(self, payload):
+        response = self._post('/object/credit-balance-adjustment/', payload)
+        return response
