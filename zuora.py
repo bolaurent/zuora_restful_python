@@ -319,3 +319,44 @@ class Zuora(object):
     def createCreditBalanceAdjustment(self, payload):
         response = self._post('/object/credit-balance-adjustment/', payload)
         return response
+
+
+    def createInvoiceSplit(self, invoiceId):
+        payload = {
+            'InvoiceId': invoiceId
+        }
+        response = self._post('/object/invoice-split/', payload)
+        return response
+
+    def createInvoiceSplitItem(self, invoiceSplitId, splitPercentage, invoiceDate, paymentTerm):
+        payload = {
+            'InvoiceSplitId': invoiceSplitId,
+            'SplitPercentage': splitPercentage,
+            'InvoiceDate': invoiceDate,
+            'PaymentTerm': paymentTerm
+        }
+
+        response = self._post('/object/invoice-split-item/', payload)
+        return response
+        
+    def executeInvoiceSplit(self, invoiceSplitId):
+        payload = {
+            'type': 'invoicesplit',
+            'synchronous': False,
+            'ids': [invoiceSplitId]
+        }
+        response = self._post('/action/execute/', payload)
+        return response
+
+    def createUsage(self, accountNumber, quantity, startDateTime, uom, extras={}):
+        payload = {
+            'AccountNumber': accountNumber,
+            'quantity': quantity,
+            'StartDateTime': startDateTime,
+            'UOM': uom
+        }
+
+        payload.update(extras)
+        response = self._post('/object/usage/', payload)
+        return response
+        
