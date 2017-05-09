@@ -2,12 +2,23 @@ import requests
 import json
 import time
 import datetime
-import pdb
 
 
 ZUORA_CHUNKSIZE = 50
 
+
+
+
 class Zuora(object):
+    """
+        config should be a dict as follows:
+            {
+            "user":     "username",
+            "password": "password",
+            "endpoint": "https://rest.apisandbox.zuora.com/v1",
+            }
+    """
+    
     def __init__(self, config):
         self.config = config
         self.auth = (config['user'], config['password'])
@@ -239,13 +250,6 @@ class Zuora(object):
         response = self._put('/accounting-periods/' + accountingPeriodId, payload)
         assert response['success'], response
 
-    # not tested
-    # def getCustomExchangeRates(self, currency, startDate, endDate):
-    #     payload = {'startDate': startDate, 'endDate': endDate}
-    #     response = self._get('/custom-exchange-rates/' + currency, payload=payload)
-    #     pdb.set_trace()
-    #     pass
-
     def createInvoiceItemAdjustment(self, type, amount, sourceType, sourceId, adjustmentDate, invoiceNumber=None, invoiceId=None):
         payload = {
             'Type': type,
@@ -261,9 +265,7 @@ class Zuora(object):
             payload['InvoiceNumber'] = invoiceNumber
             
         response = self._post('/object/invoice-item-adjustment/', payload)
-        if not response['Success']:
-            pdb.set_trace()
-        # assert response['Success'], response
+        assert response['Success'], response
         return response 
 
     def updateInvoiceItemAdjustment(self, id, reasonCode=None, status=None, transferredToAccounting=None):

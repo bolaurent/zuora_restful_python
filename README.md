@@ -1,4 +1,4 @@
-# zuora-restful-python
+# zuora_restful_python
 A python class for accessing the Zuora API via REST
 
 ## References
