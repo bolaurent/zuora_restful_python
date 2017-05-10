@@ -12,9 +12,6 @@ setup(
     'Programming Language :: Python :: 3'
   ],
   install_requires=[
-        "datetime",
-        "json",
-        "requests",
-        "time"
+        "requests"
     ]
 )
