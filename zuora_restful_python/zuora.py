@@ -1,12 +1,27 @@
+"""
+    Class Zuora
+
+    wraps the Zuora rest api
+"""
+
 import datetime
 import json
-import requests
 import time
+
+import requests
 
 
 ZUORA_CHUNKSIZE = 50
 
 
+def _unpack_response(operation, path, response):
+    if path != '/object/invoice/':
+        assert response.status_code == 200, \
+                '{} to {} failed: {}'.format(operation, path, response.content)
+    if path.startswith('/files/'):
+        return response.text
+
+    return json.loads(response.text)
 
 
 class Zuora(object):
@@ -18,101 +33,90 @@ class Zuora(object):
             "endpoint": "https://rest.apisandbox.zuora.com/v1",
             }
     """
-    
+
     def __init__(self, config):
         self.config = config
         self.auth = (config['user'], config['password'])
-        self.accountingPeriods = None
-        
-    def _get(self, path, payload={}):
-        response = requests.get(self.config['endpoint'] + path, 
-                        auth=self.auth, params=payload)
-        return self._unpackResponse('GET', path, response)
-        
+        self.accounting_periods = None
+
+    def _get(self, path, payload=None):
+        response = requests.get(self.config['endpoint'] + path,
+                                auth=self.auth, params=payload)
+        return _unpack_response('GET', path, response)
+
     def _delete(self, path):
-        response = requests.delete(self.config['endpoint'] + path, 
-                        auth=self.auth)
-        return self._unpackResponse('GET', path, response)
+        response = requests.delete(self.config['endpoint'] + path,
+                                   auth=self.auth)
+        return _unpack_response('GET', path, response)
 
     def _post(self, path, payload):
-        response = requests.post(self.config['endpoint'] + path, 
-                        json=payload,
-                        auth=self.auth)
-        return self._unpackResponse('POST', path, response)
+        response = requests.post(self.config['endpoint'] + path,
+                                 json=payload,
+                                 auth=self.auth)
+        return _unpack_response('POST', path, response)
 
     def _put(self, path, payload):
-        response = requests.put(self.config['endpoint'] + path, 
-                        json=payload,
-                        auth=self.auth)
-        return self._unpackResponse('POST', path, response)   
+        response = requests.put(self.config['endpoint'] + path,
+                                json=payload,
+                                auth=self.auth)
+        return _unpack_response('POST', path, response)
 
-    def _unpackResponse(self, operation, path, response):
-        if path != '/object/invoice/':
-            assert response.status_code == 200, '{} to {} failed: {}'.format(operation, path, response.content)
-        if path.startswith('/files/'):
-            return response.text
-        else:
-            return json.loads(response.text)
-
-    def query(self, queryString):    
-        response = self._post("/action/query", {"queryString" : queryString})
+    def query(self, query_string):
+        response = self._post("/action/query", {"queryString" : query_string})
         return response
-        
-    def queryAll(self, queryString):
-        records = []
-        response = self.query(queryString)
-        records += response['records']
-        
-        while response['done'] == False:
-            response = self.queryMore(response['queryLocator'])
-            records += response['records']
-        
-        return records
-        
-    # Use queryMore to request additional results from a previous query call. If your initial query call returns more than 2000 results, you can use queryMore to query for the additional results.
 
-    def queryMore(self, queryLocator):
-        return self._post("/action/queryMore", {"queryLocator" : queryLocator})
-        
-    def revenueRecognitionRule(self, chargeKey):
-        if isinstance(chargeKey, dict):
-            if 'ChargeId' in chargeKey:
-                chargeKey = chargeKey['ChargeId']
-        response = self._get("/revenue-recognition-rules/subscription-charges/" + chargeKey)
+    def query_all(self, query_string):
+        records = []
+        response = self.query(query_string)
+        records += response['records']
+
+        while not response['done']:
+            response = self.query_more(response['queryLocator'])
+            records += response['records']
+
+        return records
+
+    # Use query_more to request additional results from a previous query call.
+    # If your initial query call returns more than 2000 results, you can use queryMore
+    # to query for the additional results.
+
+    def query_more(self, query_locator):
+        return self._post("/action/queryMore", {"queryLocator" : query_locator})
+
+    def revenue_recognition_rule(self, charge_key):
+        if isinstance(charge_key, dict):
+            if 'ChargeId' in charge_key:
+                charge_key = charge_key['ChargeId']
+        response = self._get("/revenue-recognition-rules/subscription-charges/" + charge_key)
         assert response['success'], response
         return response['revenueRecognitionRuleName']
-                
-    def getRevenueSchedulesForInvoiceItem(self, invoiceItemId):
-        # assert len(self.query("select id from invoiceitem where id ='{}'".format(invoiceItemId))['records'])
-        response = self._get("/revenue-schedules/invoice-items/" + invoiceItemId)
+
+    def get_revenue_schedules_for_invoice_item(self, object_id):
+        response = self._get("/revenue-schedules/invoice-items/" + object_id)
         return response
 
-    def getRevenueSchedulesForSubscriptionCharge(self, chargeId):
-        response = self._get("/revenue-schedules/subscription-charges/" + chargeId)
+    def get_revenue_schedules_for_subscription_charge(self, object_id):
+        response = self._get("/revenue-schedules/subscription-charges/" + object_id)
         return response
 
-    # def deleteRevenueSchedule(self, rsNumber):
-    #     response = self._delete("/revenue-schedules/" + rsNumber)
-    #     assert response['success'], response
-
-    def delete(self, objectType, ids):
+    def delete(self, object_type, ids):
         results = []
         chunks = [ids[i:i + ZUORA_CHUNKSIZE] for i in range(0, len(ids), ZUORA_CHUNKSIZE)]
         for chunk in chunks:
-            results += self._post('/action/delete', {'type': objectType, 'ids': chunk})
+            results += self._post('/action/delete', {'type': object_type, 'ids': chunk})
 
         return results
-        
-    def getAccountPeriods(self):
-        if not self.accountingPeriods:
-            self.accountingPeriods = {}
+
+    def get_account_periods(self):
+        if not self.accounting_periods:
+            self.accounting_periods = {}
             response = self._get("/accounting-periods/")
             assert response['success'], response
-            for p in response['accountingPeriods']:
-                self.accountingPeriods[p['name']] = p
-            
-        return self.accountingPeriods
-    
+            for period in response['accountingPeriods']:
+                self.accounting_periods[period['name']] = period
+
+        return self.accounting_periods
+
     # samplePayload = {
     #     "revenueDistributions": [
     #         {
@@ -130,77 +134,90 @@ class Zuora(object):
     #         "notes": "My notes"
     #     }
     # }
-    
-    def revenueScheduleForInvoiceItem(self, invoiceItemId, payload):
-        response = self._post('/revenue-schedules/invoice-items/' + invoiceItemId, payload)
+
+    def revenue_schedule_for_invoice_item(self, object_id, payload):
+        response = self._post('/revenue-schedules/invoice-items/' + object_id, payload)
         assert response['success'], response
         return response
 
-    def revenueScheduleForSubscriptionCharge(self, invoiceItemId, payload):
-        response = self._post('/revenue-schedules/subscription-charges/' + invoiceItemId, payload)
+    def revenue_schedule_for_subscription_charge(self, object_id, payload):
+        response = self._post('/revenue-schedules/subscription-charges/' + object_id, payload)
         assert response['success'], response
         return response
 
-    def createExport(self, name, query, convertToCurrencies='USD', Encrypted=False, Format='csv', Zip=False):
+    def create_export(self, name, query,
+                      convert_to_currencies='USD',
+                      encrypted=False,
+                      file_format='csv',
+                      file_zip=False):
         payload = {
             'Name': name,
             'Query': query,
-            'ConvertToCurrencies': convertToCurrencies,
-            'Encrypted': Encrypted,
-            'Format': Format,
-            'Zip': Zip
+            'ConvertToCurrencies': convert_to_currencies,
+            'Encrypted': encrypted,
+            'Format': file_format,
+            'Zip': file_zip
         }
 
         response = self._post('/object/export/', payload)
         assert response['Success'], response
         return response['Id']
 
-    def retrieveExport(self, id, block=True):
-        response = self._get('/object/export/' + id)
+    def retrieve_export(self, object_id, block=True):
+        response = self._get('/object/export/' + object_id)
 
         if block:
             while response['Status'] in ['Pending', 'Processing']:
                 time.sleep(2)
-                response = self._get('/object/export/' + id)
+                response = self._get('/object/export/' + object_id)
 
         return response
-    
-    def deleteExport(self, id):
-        response = self._delete('/object/export/' + id)
+
+    def delete_export(self, object_id):
+        response = self._delete('/object/export/' + object_id)
         assert response['success']
         return response
 
-    def getFiles(self, id):
-        response = self._get('/files/' + id)
+    def get_files(self, object_id):
+        response = self._get('/files/' + object_id)
         return response
 
-    def queryExport(self, query):
-        exportId = self.createExport('temp.csv', query)
-        exportResponse = self.retrieveExport(exportId, block=True)
-        if exportResponse['Status'] != 'Completed':
-            return exportResponse
+    def query_export(self, query):
+        export_id = self.create_export('temp.csv', query)
+        export_response = self.retrieve_export(export_id, block=True)
+        if export_response['Status'] != 'Completed':
+            return export_response
 
-        fileResponse = self.getFiles(exportResponse['FileId'])
-        self.deleteExport(exportId)
-        return fileResponse
+        file_response = self.get_files(export_response['FileId'])
+        self.delete_export(export_id)
+        return file_response
 
-    def createInvoice(self, accountId, invoiceDate, targetDate,
-                        includesOneTime=True,
-                        includesRecurring=True,
-                        includesUsage=True):
+    def update_object(self, object_name, object_id, payload):
+        payload['Id'] = id
+        response = self._put('/object/{}/'.format(object_name) + object_id, payload)
+        assert response['Success'], response
 
-        if isinstance(invoiceDate, datetime.date):
-            invoiceDate = invoiceDate.strftime('%Y-%m-%d')
-        if isinstance(targetDate, datetime.date):
-            targetDate = targetDate.strftime('%Y-%m-%d')
+    def create_object(self, object_name, payload):
+        response = self._post('/object/{}/'.format(object_name), payload)
+        assert response['Success'], response
 
-        payload={
-            'AccountId': accountId,
-            'IncludesOneTime': includesOneTime,
-            'includesRecurring': includesRecurring,
-            'IncludesUsage': includesUsage,
-            'InvoiceDate': invoiceDate,
-            'TargetDate': targetDate
+    def create_invoice(self, account_id, invoice_date, target_date,
+                       includes_one_time=True,
+                       includes_recurring=True,
+                       includes_usage=True):
+
+        if isinstance(invoice_date, datetime.date):
+            invoice_date = invoice_date.strftime('%Y-%m-%d')
+        if isinstance(target_date, datetime.date):
+            target_date = target_date.strftime('%Y-%m-%d')
+
+        payload = {
+            'AccountId': account_id,
+            'IncludesOneTime': includes_one_time,
+            'includesRecurring': includes_recurring,
+            'IncludesUsage': includes_usage,
+            'InvoiceDate': invoice_date,
+            'TargetDate': target_date
         }
 
         response = self._post('/object/invoice/', payload)
@@ -211,154 +228,152 @@ class Zuora(object):
         assert response['Success'], response
         return response
 
-    def updateInvoice(self, invoiceId, payload):
-        payload['Id'] = invoiceId
-        response = self._put('/object/invoice/' + invoiceId, payload)
-        assert response['Success'], response
+    def update_invoice(self, object_id, payload):
+        return self.update_object('invoice', object_id, payload)
 
-    def createProduct(self, product):
-        response = self._post('/object/product/', product)
-        assert response['Success'], response
-        return response['Id']                
-    
-    def updateProduct(self, productId, payload):
-        payload['Id'] = productId
-        response = self._put('/object/product/' + productId, payload)
-        assert response['Success'], response
+    def create_product(self, product):
+        return self.create_object('product', product)
 
-    def createProductRatePlan(self, ratePlan):
-        response = self._post('/object/product-rate-plan/', ratePlan)
-        assert response['Success'], response
-        return response['Id']                
-        
-    def createProductRatePlanCharge(self, ratePlanCharge):
-        response = self._post('/object/product-rate-plan-charge/', ratePlanCharge)
-        assert response['Success'], response
-        return response['Id']   
+    def update_product(self, object_id, payload):
+        return self.update_object('product', object_id, payload)
 
-    def updateProductRatePlanCharge(self, ratePlanChargeId, payload):
-        payload['Id'] = ratePlanChargeId
-        response = self._put('/object/product-rate-plan-charge/' + ratePlanChargeId, payload)
-        assert response['Success'], response
+    def create_product_rate_plan(self, product_rate_plan):
+        return self.create_object('product-rate-plan', product_rate_plan)
 
-    def getAllAccountingPeriods(self):
+    def create_product_rate_plan_charge(self, product_rate_plan_charge):
+        return self.create_object('product-rate-plan-charge', product_rate_plan_charge)
+
+    def update_product_rate_plan_charge(self, object_id, payload):
+        return self.update_object('rate', object_id, payload)
+
+    def get_all_accounting_periods(self):
         response = self._get('/accounting-periods/')
         assert response['success'], response
         return response['accountingPeriods']
 
-    def updateAccountingPeriod(self, accountingPeriodId, payload):
-        response = self._put('/accounting-periods/' + accountingPeriodId, payload)
+    def update_accounting_period(self, object_id, payload):
+        response = self._put('/accounting-periods/' + object_id, payload)
         assert response['success'], response
 
-    def createInvoiceItemAdjustment(self, type, amount, sourceType, sourceId, adjustmentDate, invoiceNumber=None, invoiceId=None):
+    def create_invoice_item_adjustment(self,
+                                       adjustment_type,
+                                       amount,
+                                       source_type,
+                                       source_id,
+                                       adjustment_date,
+                                       invoice_number=None,
+                                       invoice_id=None):
         payload = {
-            'Type': type,
+            'Type': adjustment_type,
             'Amount': amount,
-            'SourceType': sourceType,
-            'SourceId': sourceId,
-            'AdjustmentDate': adjustmentDate
+            'SourceType': source_type,
+            'SourceId': source_id,
+            'AdjustmentDate': adjustment_date
         }
 
-        if invoiceId:
-            payload['InvoiceId'] = invoiceId
-        elif invoiceNumber:
-            payload['InvoiceNumber'] = invoiceNumber
-            
+        if invoice_id:
+            payload['InvoiceId'] = invoice_id
+        elif invoice_number:
+            payload['InvoiceNumber'] = invoice_number
+
         response = self._post('/object/invoice-item-adjustment/', payload)
         assert response['Success'], response
-        return response 
+        return response
 
-    def updateInvoiceItemAdjustment(self, id, reasonCode=None, status=None, transferredToAccounting=None):
+    def update_invoice_item_adjustment(self, object_id,
+                                       reason_code=None,
+                                       status=None,
+                                       transferred_to_accounting=None):
         payload = {}
-        if reasonCode:
-            payload['ReasonCode'] = reasonCode
+        if reason_code:
+            payload['ReasonCode'] = reason_code
         if status:
             payload['Status'] = status
-        if transferredToAccounting:
-            payload['TransferredToAccounting'] = transferredToAccounting
-        response = self._put('/object/invoice-item-adjustment/' + id, payload)
+        if transferred_to_accounting:
+            payload['TransferredToAccounting'] = transferred_to_accounting
+        response = self._put('/object/invoice-item-adjustment/' + object_id, payload)
         assert response['Success'], response
-        return response 
-        
-    def createBillRun(self, invoiceDate, targetDate,
-                        accountId=None, 
-                        autoEmail=False, 
-                        autoPost=False, 
-                        autoRenewal=False,
-                        batch='AllBatches', 
-                        billCycleDay='AllBillCycleDays',
-                        chargeTypeToExclude='',
-                        noEmailForZeroAmountInvoice=False):
-        payload={
-                    'InvoiceDate': invoiceDate if isinstance(invoiceDate, str) else invoiceDate.strftime('%Y-%m-%d'),
-                    'TargetDate': targetDate if isinstance(targetDate, str) else targetDate.strftime('%Y-%m-%d'),
-                    'AutoEmail': autoEmail, 
-                    'AutoPost': autoPost, 
-                    'AutoRenewal': autoRenewal,
-                    'Batch': batch,
-                    'BillCycleDay': billCycleDay,
-                    'NoEmailForZeroAmountInvoice': noEmailForZeroAmountInvoice             
+        return response
+
+    def create_bill_run(self, invoice_date, target_date,
+                        account_id=None,
+                        auto_email=False,
+                        auto_post=False,
+                        auto_renewal=False,
+                        batch='AllBatches',
+                        bill_cycle_day='AllBillCycleDays',
+                        charge_type_to_exclude='',
+                        no_email_for_zero_amount_invoice=False):
+        payload = {
+            'InvoiceDate': invoice_date if isinstance(invoice_date, str) else invoice_date.strftime('%Y-%m-%d'),
+            'TargetDate': target_date if isinstance(target_date, str) else target_date.strftime('%Y-%m-%d'),
+            'AutoEmail': auto_email,
+            'AutoPost': auto_post,
+            'AutoRenewal': auto_renewal,
+            'Batch': batch,
+            'BillCycleDay': bill_cycle_day,
+            'NoEmailForZeroAmountInvoice': no_email_for_zero_amount_invoice
         }
 
-        if accountId:
-            payload['AccountId'] = accountId
-        if chargeTypeToExclude:
-            payload['ChargeTypeToExclude'] = chargeTypeToExclude
+        if account_id:
+            payload['AccountId'] = account_id
+        if charge_type_to_exclude:
+            payload['ChargeTypeToExclude'] = charge_type_to_exclude
 
         response = self._post('/object/bill-run/', payload)
         assert response['Success'], response
         return response
 
-    def createPayment(self, payload):
-        response = self._post('/object/payment/', payload)
-        return response
+    def create_payment(self, payment):
+        return self.create_object('payment', payment)
 
 
     # https://knowledgecenter.zuora.com/DC_Developers/SOAP_API/E1_SOAP_API_Object_Reference/CreditBalanceAdjustment
-    # 
+    #
     # Requires you open a Zuora Support ticket to enable this feature
     #
-    def createCreditBalanceAdjustment(self, payload):
-        response = self._post('/object/credit-balance-adjustment/', payload)
-        return response
+    def create_credit_balance_adjustment(self, payload):
+        return self.create_object('credit-balance-adjustment', payload)
 
-
-    def createInvoiceSplit(self, invoiceId):
+    def create_invoice_split(self, invoice_id):
         payload = {
-            'InvoiceId': invoiceId
+            'InvoiceId': invoice_id
         }
         response = self._post('/object/invoice-split/', payload)
         return response
 
-    def createInvoiceSplitItem(self, invoiceSplitId, splitPercentage, invoiceDate, paymentTerm):
+    def create_invoice_split_item(self,
+                                  invoice_split_id,
+                                  split_percentage,
+                                  invoice_date,
+                                  payment_term):
         payload = {
-            'InvoiceSplitId': invoiceSplitId,
-            'SplitPercentage': splitPercentage,
-            'InvoiceDate': invoiceDate,
-            'PaymentTerm': paymentTerm
+            'InvoiceSplitId': invoice_split_id,
+            'SplitPercentage': split_percentage,
+            'InvoiceDate': invoice_date,
+            'PaymentTerm': payment_term
         }
 
         response = self._post('/object/invoice-split-item/', payload)
         return response
-        
-    def executeInvoiceSplit(self, invoiceSplitId):
+
+    def execute_invoice_split(self, invoice_split_id):
         payload = {
             'type': 'invoicesplit',
             'synchronous': False,
-            'ids': [invoiceSplitId]
+            'ids': [invoice_split_id]
         }
         response = self._post('/action/execute/', payload)
         return response
 
-    def createUsage(self, accountNumber, quantity, startDateTime, uom, extras={}):
+    def create_usage(self, account_number, quantity, start_date_time, uom, extras=None):
         payload = {
-            'AccountNumber': accountNumber,
+            'AccountNumber': account_number,
             'quantity': quantity,
-            'StartDateTime': startDateTime,
+            'StartDateTime': start_date_time,
             'UOM': uom
         }
 
         payload.update(extras)
         response = self._post('/object/usage/', payload)
         return response
-        
