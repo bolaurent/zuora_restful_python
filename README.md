@@ -12,13 +12,8 @@ pip install  git+git://github.com/bolaurent/zuora_restful_python.git
 import sys
 from zuora_restful_python.zuora import Zuora
 
-ZOURA_CONFIG = {
-    "user":     sys.argv[1],
-    "password": sys.argv[2],
-    "endpoint": "https://rest.apisandbox.zuora.com/v1",
-}
-
-zuora = Zuora(ZOURA_CONFIG)
+(username, password) = sys.argv[1:3]
+zuora = Zuora(username, password)
 
 for record in zuora.query_all('select Name from Account'):
     print(record['Name'])
