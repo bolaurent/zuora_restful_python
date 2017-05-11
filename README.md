@@ -22,3 +22,7 @@ for record in zuora.query_all('select Name from Account'):
 ## References
 
 * [Zuora Developer Center](https://www.zuora.com/developer/)
+
+## Note
+
+if you are looking for the command line tool zoql, it has moved to https://github.com/bolaurent/python-cmdline-zoql.
