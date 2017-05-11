@@ -1,7 +1,28 @@
 # zuora_restful_python
 A python class for accessing the Zuora API via REST
 
+# install
+```
 pip install  git+git://github.com/bolaurent/zuora_restful_python.git
+```
+
+# sample use
+
+```
+import sys
+from zuora_restful_python.zuora import Zuora
+
+ZOURA_CONFIG = {
+    "user":     sys.argv[1],
+    "password": sys.argv[2],
+    "endpoint": "https://rest.apisandbox.zuora.com/v1",
+}
+
+zuora = Zuora(ZOURA_CONFIG)
+
+for record in zuora.query_all('select Name from Account'):
+    print(record['Name'])
+```
 
 ## References
 
