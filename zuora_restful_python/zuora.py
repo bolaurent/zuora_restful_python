@@ -4,6 +4,9 @@
     wraps the Zuora rest api
 """
 
+# pylint: disable=C0111,R0904,R0913
+
+
 import datetime
 import json
 import time
@@ -26,37 +29,39 @@ def _unpack_response(operation, path, response):
 
 class Zuora(object):
     """
-        config should be a dict as follows:
-            {
-            "user":     "username",
-            "password": "password",
-            "endpoint": "https://rest.apisandbox.zuora.com/v1",
-            }
+    instantiates a connection to Zuora service
     """
 
-    def __init__(self, config):
-        self.config = config
-        self.auth = (config['user'], config['password'])
+    def __init__(self, username, password, endpoint='production'):
+        self.auth = (username, password)
+
+        if endpoint == 'production':
+            self.endpoint = 'https://rest.zuora.com/v1'
+        elif endpoint == 'sandbox':
+            self.endpoint = 'https://rest.apisandbox.zuora.com/v1'
+        else:
+            self.endpoint = endpoint
+
         self.accounting_periods = None
 
     def _get(self, path, payload=None):
-        response = requests.get(self.config['endpoint'] + path,
+        response = requests.get(self.endpoint + path,
                                 auth=self.auth, params=payload)
         return _unpack_response('GET', path, response)
 
     def _delete(self, path):
-        response = requests.delete(self.config['endpoint'] + path,
+        response = requests.delete(self.endpoint + path,
                                    auth=self.auth)
         return _unpack_response('GET', path, response)
 
     def _post(self, path, payload):
-        response = requests.post(self.config['endpoint'] + path,
+        response = requests.post(self.endpoint + path,
                                  json=payload,
                                  auth=self.auth)
         return _unpack_response('POST', path, response)
 
     def _put(self, path, payload):
-        response = requests.put(self.config['endpoint'] + path,
+        response = requests.put(self.endpoint + path,
                                 json=payload,
                                 auth=self.auth)
         return _unpack_response('POST', path, response)
@@ -255,11 +260,7 @@ class Zuora(object):
         response = self._put('/accounting-periods/' + object_id, payload)
         assert response['success'], response
 
-    def create_invoice_item_adjustment(self,
-                                       adjustment_type,
-                                       amount,
-                                       source_type,
-                                       source_id,
+    def create_invoice_item_adjustment(self, adjustment_type, amount, source_type, source_id,
                                        adjustment_date,
                                        invoice_number=None,
                                        invoice_id=None):
@@ -304,6 +305,7 @@ class Zuora(object):
                         bill_cycle_day='AllBillCycleDays',
                         charge_type_to_exclude='',
                         no_email_for_zero_amount_invoice=False):
+        # pylint: disable=line-too-long
         payload = {
             'InvoiceDate': invoice_date if isinstance(invoice_date, str) else invoice_date.strftime('%Y-%m-%d'),
             'TargetDate': target_date if isinstance(target_date, str) else target_date.strftime('%Y-%m-%d'),
@@ -314,6 +316,7 @@ class Zuora(object):
             'BillCycleDay': bill_cycle_day,
             'NoEmailForZeroAmountInvoice': no_email_for_zero_amount_invoice
         }
+        # pylint: enable=line-too-long
 
         if account_id:
             payload['AccountId'] = account_id
