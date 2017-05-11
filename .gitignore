@@ -17,4 +17,4 @@ htmlcov
 .coverage
 .coverage.*
 *,cover
-.vscode
+.vscode/*
