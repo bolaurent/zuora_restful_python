@@ -30,6 +30,8 @@ def _unpack_response(operation, path, response):
 class Zuora(object):
     """
     instantiates a connection to Zuora service
+    
+    example custom headers: headers={'zuora-version':'196.0'}
     """
 
     def __init__(self, username, password, endpoint='production', headers={}):
