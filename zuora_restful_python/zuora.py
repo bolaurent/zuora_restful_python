@@ -32,7 +32,7 @@ class Zuora(object):
     instantiates a connection to Zuora service
     """
 
-    def __init__(self, username, password, endpoint='production'):
+    def __init__(self, username, password, endpoint='production', headers={}):
         self.auth = (username, password)
 
         if endpoint == 'production':
@@ -46,24 +46,29 @@ class Zuora(object):
 
     def _get(self, path, payload=None):
         response = requests.get(self.endpoint + path,
-                                auth=self.auth, params=payload)
+                                auth=self.auth, 
+                                headers=headers,
+                                params=payload)
         return _unpack_response('GET', path, response)
 
     def _delete(self, path):
         response = requests.delete(self.endpoint + path,
-                                   auth=self.auth)
+                                   auth=self.auth,
+                                  headers=headers)
         return _unpack_response('GET', path, response)
 
     def _post(self, path, payload):
         response = requests.post(self.endpoint + path,
                                  json=payload,
-                                 auth=self.auth)
+                                 auth=self.auth,
+                                 headers=headers)
         return _unpack_response('POST', path, response)
 
     def _put(self, path, payload):
         response = requests.put(self.endpoint + path,
                                 json=payload,
-                                auth=self.auth)
+                                auth=self.auth,
+                                headers=headers)
         return _unpack_response('POST', path, response)
 
     def query(self, query_string):
