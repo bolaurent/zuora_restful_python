@@ -381,3 +381,9 @@ class Zuora(object):
         payload.update(extras)
         response = self._post('/object/usage/', payload)
         return response
+    
+    def create_subscription(self, payload):
+        response = self._post('/subscriptions/', payload)
+        return response
+    
+        
