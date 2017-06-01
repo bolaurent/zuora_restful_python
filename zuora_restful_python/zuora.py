@@ -205,6 +205,7 @@ class Zuora(object):
     def create_object(self, object_name, payload):
         response = self._post('/object/{}/'.format(object_name), payload)
         assert response['Success'], response
+        return response
 
     def create_invoice(self, account_id, invoice_date, target_date,
                        includes_one_time=True,
