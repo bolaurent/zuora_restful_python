@@ -198,7 +198,7 @@ class Zuora(object):
         return file_response
 
     def update_object(self, object_name, object_id, payload):
-        payload['Id'] = id
+        payload['Id'] = object_id
         response = self._put('/object/{}/'.format(object_name) + object_id, payload)
         assert response['Success'], response
 
