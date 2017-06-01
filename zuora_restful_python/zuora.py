@@ -43,32 +43,33 @@ class Zuora(object):
             self.endpoint = endpoint
 
         self.accounting_periods = None
+        self.headers = headers
 
     def _get(self, path, payload=None):
         response = requests.get(self.endpoint + path,
                                 auth=self.auth, 
-                                headers=headers,
+                                headers=self.headers,
                                 params=payload)
         return _unpack_response('GET', path, response)
 
     def _delete(self, path):
         response = requests.delete(self.endpoint + path,
                                    auth=self.auth,
-                                  headers=headers)
+                                  headers=self.headers)
         return _unpack_response('GET', path, response)
 
     def _post(self, path, payload):
         response = requests.post(self.endpoint + path,
                                  json=payload,
                                  auth=self.auth,
-                                 headers=headers)
+                                 headers=self.headers)
         return _unpack_response('POST', path, response)
 
     def _put(self, path, payload):
         response = requests.put(self.endpoint + path,
                                 json=payload,
                                 auth=self.auth,
-                                headers=headers)
+                                headers=self.headers)
         return _unpack_response('POST', path, response)
 
     def query(self, query_string):
