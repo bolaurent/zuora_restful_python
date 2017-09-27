@@ -321,14 +321,16 @@ class Zuora(object):
             'AutoEmail': auto_email,
             'AutoPost': auto_post,
             'AutoRenewal': auto_renewal,
-            'Batch': batch,
-            'BillCycleDay': bill_cycle_day,
             'NoEmailForZeroAmountInvoice': no_email_for_zero_amount_invoice
         }
         # pylint: enable=line-too-long
 
         if account_id:
             payload['AccountId'] = account_id
+        else:
+            payload['batch'] = batch
+            payload['BillCycleDay'] = bill_cycle_day
+
         if charge_type_to_exclude:
             payload['ChargeTypeToExclude'] = charge_type_to_exclude
 
