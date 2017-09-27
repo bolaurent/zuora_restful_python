@@ -396,4 +396,7 @@ class Zuora(object):
         response = self._post('/subscriptions/', payload)
         return response
     
+    def cancel_subscription(self, subscriptionkey, payload):
+        response = self._put('/subscriptions/{}/cancel'.format(subscriptionkey), payload)
+        assert response['success'], response
         
