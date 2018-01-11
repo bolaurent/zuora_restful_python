@@ -383,7 +383,7 @@ class Zuora(object):
     def create_usage(self, account_number, quantity, start_date_time, uom, extras=None):
         payload = {
             'AccountNumber': account_number,
-            'quantity': quantity,
+            'Quantity': quantity,
             'StartDateTime': start_date_time,
             'UOM': uom
         }
