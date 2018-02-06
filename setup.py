@@ -2,7 +2,7 @@ from setuptools import setup
 setup(
   name = 'zuora_restful_python',
   packages = ['zuora_restful_python'], 
-  version = '0.14',
+  version = '0.15',
   description = 'zuora REST API wrapper',
   author = 'Bo Laurent',
   author_email = 'bo@bolaurent.com',
