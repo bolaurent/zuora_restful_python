@@ -400,3 +400,13 @@ class Zuora(object):
         response = self._put('/subscriptions/{}/cancel'.format(subscriptionkey), payload)
         assert response['success'], response
         
+    def create(self, type, objects):
+        response = self._post('/action/create/', {
+            'objects': objects,
+            'type': type
+        })
+        return response
+
+    def subscribe(self, payload):
+        response = self._post('/action/subscribe', payload)
+        return response
